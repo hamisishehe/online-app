@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  APPLICANT
+  ADMIN
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           Int    @id @default(autoincrement())
+  fullName     String
+  email        String @unique
+  phoneNumber  String
+  passwordHash String
+  role         Role   @default(APPLICANT)
+
+  application Application?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Application {
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  courseId Int?
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  status      ApplicationStatus @default(DRAFT)
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  adminNote   String?
+
+  // Step 1: Personal
+  gender       String?
+  dateOfBirth  DateTime?
+  citizenship  String?
+  nidaNumber   String?
+  hasNbcAccount Boolean? @default(false)
+
+  // Step 2: Contact / guardian
+  applicantPoBox      String?
+  residenceVillageWard String?
+  residenceDistrict    String?
+  guardianFullName     String?
+  guardianPoBox        String?
+  guardianPhoneNumber  String?
+  guardianEmail        String?
+
+  // Step 3: Education + choice
+  educationLevel        String?
+  educationYearCompleted Int?
+  educationGrade        String?
+  educationInstitution  String?
+  preferredCollege      String?
+
+  // Step 4: Uploads + declaration
+  passportPhotoUrl        String?
+  birthCertificateUrl     String?
+  educationCertificatesUrl String?
+  declarationAccepted     Boolean @default(false)
+  applicantSignatureName  String?
+  applicantSignatureDate  DateTime?
+  guardianSignatureName   String?
+  guardianSignatureDate   DateTime?
+
+  // Legacy education fields (kept for compatibility)
+  primarySchoolName       String?
+  primaryYearFrom         Int?
+  primaryYearTo           Int?
+  primaryQualification    String?
+  secondarySchoolName     String?
+  secondaryYearFrom       Int?
+  secondaryYearTo         Int?
+  secondaryGrade          String?
+  tertiaryInstitutionName String?
+  tertiaryCourseName      String?
+  tertiaryYearFrom        Int?
+  tertiaryYearTo          Int?
+  tertiaryGrade           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SiteSettings {
+  id Int @id @default(autoincrement())
+
+  portalName      String @default("Online Application")
+  heroTitle       String @default("Apply for short courses")
+  heroDescription String @default("Create an account, fill your education details, and submit your application.")
+  ctaText         String @default("Start application")
+
+  logoUrl      String?
+  heroImageUrl String?
+
+  // Theme (simple presets)
+  primaryTheme String @default("sky")
+  sidebarTheme String @default("light")
+  headerTheme  String @default("default")
+
+  updatedAt DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+model Course {
+  id Int @id @default(autoincrement())
+
+  title       String
+  duration    String?
+  description String?
+  imageUrl    String?
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applications Application[]
+
+  @@map("courses")
+}
