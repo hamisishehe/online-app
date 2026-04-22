@@ -8,6 +8,13 @@ export type SessionPayload = {
 
 const COOKIE_NAME = "session";
 
+function isSecureCookieEnabled() {
+  const value = process.env.SESSION_COOKIE_SECURE;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return process.env.NODE_ENV === "production";
+}
+
 function getEncodedKey() {
   const secret = process.env.SESSION_SECRET;
   if (!secret) throw new Error("SESSION_SECRET is not set");
@@ -25,7 +32,7 @@ export async function createSession(payload: SessionPayload) {
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, session, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureCookieEnabled(),
     expires: expiresAt,
     sameSite: "lax",
     path: "/",
@@ -57,4 +64,3 @@ export async function getSessionPayload(): Promise<SessionPayload | null> {
     return null;
   }
 }
-

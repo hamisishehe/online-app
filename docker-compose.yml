@@ -20,25 +20,16 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/onlineapplication?schema=public
       SESSION_SECRET: abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmnopqrstuvwxyz1234567890
+      SESSION_COOKIE_SECURE: "false"
       NODE_ENV: production
-    expose:
-      - "3000"
+      PORT: 3005
+    ports:
+      - "3005:3005"
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - uploads:/app/public/uploads
-
-  nginx:
-    build:
-      context: ./nginx
-    environment:
-      SERVER_NAME: localhost
-    depends_on:
-      - app
-    restart: unless-stopped
-    ports:
-      - "3005:443"
 
 volumes:
   db_data:
