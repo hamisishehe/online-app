@@ -53,7 +53,7 @@ export function SidebarNav({ items }: { items: SidebarNavItem[] }) {
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
-                  <Link href={item.href}>
+                  <Link href={item.href} prefetch={false}>
                     <Icon />
                     <span>{item.title}</span>
                   </Link>

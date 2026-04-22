@@ -57,7 +57,7 @@ export function AppSidebar({
               asChild
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
-              <Link href={homeHref} className="flex items-center gap-2">
+              <Link href={homeHref} prefetch={false} className="flex items-center gap-2">
                 {logoUrl ? (
                   <img
                     src={logoUrl}

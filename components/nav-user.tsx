@@ -91,7 +91,7 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href={profileHref}>
+                <Link href={profileHref} prefetch={false}>
                   <CircleUserRoundIcon />
                   Profile
                 </Link>
