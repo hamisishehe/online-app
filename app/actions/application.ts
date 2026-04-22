@@ -1,13 +1,11 @@
 "use server";
 
-import { randomUUID } from "crypto";
-import path from "path";
-import { mkdir, writeFile } from "fs/promises";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApplicant } from "@/lib/auth/current-user";
 import { getPrismaDelegate, hasFunction } from "@/lib/prisma-delegates";
+import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import {
   contactInfoSchema,
   declarationSchema,
@@ -47,32 +45,18 @@ function getApplicationDelegate() {
 }
 
 async function saveUpload(file: File | null) {
-  if (!file || file.size === 0) return null;
-
-  const allowedTypes = new Set([
-    "application/pdf",
-    "image/png",
-    "image/jpeg",
-    "image/webp",
-  ]);
-  if (!allowedTypes.has(file.type)) return null;
-
-  const extRaw = path.extname(file.name || "").toLowerCase();
-  const ext = [".png", ".jpg", ".jpeg", ".webp", ".pdf"].includes(extRaw)
-    ? extRaw
-    : file.type === "application/pdf"
-      ? ".pdf"
-      : ".png";
-
-  const uploadsDir = path.join(process.cwd(), "public", "uploads", "applications");
-  await mkdir(uploadsDir, { recursive: true });
-
-  const filename = `${Date.now()}-${randomUUID()}${ext}`;
-  const filepath = path.join(uploadsDir, filename);
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  await writeFile(filepath, buffer);
-  return `/uploads/applications/${filename}`;
+  return saveUploadedFile({
+    file,
+    allowedMimeTypes: new Set([
+      "application/pdf",
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+    ]),
+    allowedExtensions: [".png", ".jpg", ".jpeg", ".webp", ".pdf"],
+    fallbackExtension: file?.type === "application/pdf" ? ".pdf" : ".png",
+    subdir: "applications",
+  });
 }
 
 async function getDraftApplicationForUser(userId: number) {
@@ -242,11 +226,21 @@ export async function saveDeclaration(_state: FormState, formData: FormData): Pr
   const birthFile = formData.get("birthCertificateFile");
   const eduFile = formData.get("educationCertificatesFile");
 
-  const uploadedPassport =
-    passportFile instanceof File ? await saveUpload(passportFile) : null;
-  const uploadedBirth =
-    birthFile instanceof File ? await saveUpload(birthFile) : null;
-  const uploadedEdu = eduFile instanceof File ? await saveUpload(eduFile) : null;
+  let uploadedPassport: string | null = null;
+  let uploadedBirth: string | null = null;
+  let uploadedEdu: string | null = null;
+  try {
+    uploadedPassport =
+      passportFile instanceof File ? await saveUpload(passportFile) : null;
+    uploadedBirth =
+      birthFile instanceof File ? await saveUpload(birthFile) : null;
+    uploadedEdu = eduFile instanceof File ? await saveUpload(eduFile) : null;
+  } catch (error) {
+    if (error instanceof UploadError) {
+      return { message: error.message };
+    }
+    throw error;
+  }
 
   const passportPhotoUrl = uploadedPassport ?? draft.app.passportPhotoUrl;
   const birthCertificateUrl = uploadedBirth ?? draft.app.birthCertificateUrl;

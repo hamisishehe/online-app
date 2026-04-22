@@ -1,12 +1,10 @@
 "use server";
 
-import { randomUUID } from "crypto";
-import path from "path";
-import { mkdir, writeFile } from "fs/promises";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPrismaDelegate, hasFunction } from "@/lib/prisma-delegates";
+import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import {
   createCourseSchema,
   FormState,
@@ -15,23 +13,18 @@ import {
 } from "@/lib/validation";
 
 async function saveImageUpload(file: File | null) {
-  if (!file || file.size === 0) return null;
-  if (!file.type.startsWith("image/")) return null;
-
-  const extRaw = path.extname(file.name || "").toLowerCase();
-  const ext = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"].includes(extRaw)
-    ? extRaw
-    : ".png";
-
-  const uploadsDir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(uploadsDir, { recursive: true });
-
-  const filename = `${Date.now()}-${randomUUID()}${ext}`;
-  const filepath = path.join(uploadsDir, filename);
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  await writeFile(filepath, buffer);
-  return `/uploads/${filename}`;
+  return saveUploadedFile({
+    file,
+    allowedMimeTypes: new Set([
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/gif",
+      "image/svg+xml",
+    ]),
+    allowedExtensions: [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"],
+    fallbackExtension: ".png",
+  });
 }
 
 export async function updateSiteSettings(
@@ -72,8 +65,15 @@ export async function updateSiteSettings(
   const removeLogo = formData.get("removeLogo") === "on";
   const removeHero = formData.get("removeHero") === "on";
 
-  const uploadedLogoUrl = logoFile instanceof File ? await saveImageUpload(logoFile) : null;
-  const uploadedHeroUrl = heroFile instanceof File ? await saveImageUpload(heroFile) : null;
+  let uploadedLogoUrl: string | null = null;
+  let uploadedHeroUrl: string | null = null;
+  try {
+    uploadedLogoUrl = logoFile instanceof File ? await saveImageUpload(logoFile) : null;
+    uploadedHeroUrl = heroFile instanceof File ? await saveImageUpload(heroFile) : null;
+  } catch (error) {
+    if (error instanceof UploadError) return { message: error.message };
+    throw error;
+  }
 
   const logoUrl = removeLogo
     ? null
@@ -169,8 +169,14 @@ export async function createCourse(
   if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors };
 
   const imageFile = formData.get("imageFile");
-  const uploadedImageUrl =
-    imageFile instanceof File ? await saveImageUpload(imageFile) : null;
+  let uploadedImageUrl: string | null = null;
+  try {
+    uploadedImageUrl =
+      imageFile instanceof File ? await saveImageUpload(imageFile) : null;
+  } catch (error) {
+    if (error instanceof UploadError) return { message: error.message };
+    throw error;
+  }
 
   await courseDelegate.create({
     data: {
@@ -217,8 +223,14 @@ export async function updateCourse(
   const currentImageUrl =
     (formData.get("currentImageUrl") as string | null) ?? "";
   const removeImage = formData.get("removeImage") === "on";
-  const uploadedImageUrl =
-    imageFile instanceof File ? await saveImageUpload(imageFile) : null;
+  let uploadedImageUrl: string | null = null;
+  try {
+    uploadedImageUrl =
+      imageFile instanceof File ? await saveImageUpload(imageFile) : null;
+  } catch (error) {
+    if (error instanceof UploadError) return { message: error.message };
+    throw error;
+  }
 
   const imageUrl = removeImage
     ? null
