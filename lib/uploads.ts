@@ -11,6 +11,9 @@ export class UploadError extends Error {
 
 function normalizePublicBase() {
   const base = (process.env.UPLOAD_PUBLIC_BASE ?? "/uploads").trim();
+  if (/^https?:\/\//i.test(base)) {
+    return base.replace(/\/+$/, "");
+  }
   if (!base.startsWith("/")) return `/${base.replace(/^\/+/, "")}`;
   return base.replace(/\/+$/, "") || "/uploads";
 }

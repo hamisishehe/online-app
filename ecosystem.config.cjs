@@ -12,6 +12,7 @@ module.exports = {
         NODE_ENV: "production",
         PORT: "3005",
         SESSION_COOKIE_SECURE: "false",
+        UPLOAD_PUBLIC_BASE: "http://10.10.11.12:3005/uploads",
       },
     },
   ],

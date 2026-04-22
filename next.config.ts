@@ -9,6 +9,16 @@ const allowedDevOrigins = (
 
 const nextConfig: NextConfig = {
   allowedDevOrigins,
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/uploads/:path*",
+          destination: "/media/:path*",
+        },
+      ],
+    };
+  },
   experimental: {
     serverActions: {
       // Allow image uploads via Server Actions (default is 1MB)
