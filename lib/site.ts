@@ -58,7 +58,7 @@ export async function getPublicSiteContent(): Promise<{
 
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2021"
+      ["P1000", "P1001", "P2021"].includes(error.code)
     ) {
       return { settings: null, courses: [] };
     }
