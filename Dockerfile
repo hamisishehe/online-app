@@ -4,6 +4,9 @@ FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY prisma.config.ts ./prisma.config.ts
+COPY prisma ./prisma
+COPY scripts ./scripts
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
