@@ -10,9 +10,11 @@ module.exports = {
       autorestart: true,
       env: {
         NODE_ENV: "production",
+        HOSTNAME: "0.0.0.0",
         PORT: "3005",
         SESSION_COOKIE_SECURE: "false",
-        UPLOAD_PUBLIC_BASE: "http://10.10.11.12:3005/uploads",
+        SERVER_ACTIONS_ALLOWED_ORIGINS: "localhost:3005,127.0.0.1:3005,41.59.57.5:3005",
+        UPLOAD_PUBLIC_BASE: "/uploads",
       },
     },
   ],
