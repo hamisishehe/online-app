@@ -34,6 +34,8 @@ type ApplicationRow = {
   user: { fullName: string; email: string };
 };
 
+type ApplicationStatusFilter = "all" | "DRAFT" | "SUBMITTED";
+
 function PrismaNotReadyCard({ title }: { title: string }) {
   return (
     <Card>
@@ -53,41 +55,50 @@ function parsePage(value: unknown) {
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: { page?: string; updated?: string; error?: string };
-}) {
+function parseStatusFilter(value: unknown): ApplicationStatusFilter {
+  if (value === "DRAFT" || value === "SUBMITTED") {
+    return value;
+  }
+
+  return "all";
+}
+
+export default async function Page(props: PageProps<"/admin/applications">) {
   await requireAdmin();
 
+  const searchParams = await props.searchParams;
   const applicationDelegate = getPrismaDelegate("application");
   if (!hasFunction(applicationDelegate, "findMany")) {
     return <PrismaNotReadyCard title="Prisma Client not updated" />;
   }
 
   const pageSize = 10;
-  const page = parsePage(searchParams.page);
+  const requestedPage = parsePage(searchParams.page);
+  const statusFilter = parseStatusFilter(searchParams.status);
+  const where =
+    statusFilter === "all" ? {} : { status: statusFilter };
+
+  const total = await prisma.application.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
   const skip = (page - 1) * pageSize;
 
   let applications: ApplicationRow[] = [];
-  let total = 0;
   try {
-    [applications, total] = await Promise.all([
-      (applicationDelegate.findMany({
-        orderBy: { updatedAt: "desc" },
-        skip,
-        take: pageSize,
-        select: {
-          id: true,
-          status: true,
-          course: { select: { title: true } },
-          submittedAt: true,
-          updatedAt: true,
-          user: { select: { fullName: true, email: true } },
-        },
-      }) as unknown as Promise<ApplicationRow[]>),
-      prisma.application.count(),
-    ]);
+    applications = await (applicationDelegate.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      skip,
+      take: pageSize,
+      select: {
+        id: true,
+        status: true,
+        course: { select: { title: true } },
+        submittedAt: true,
+        updatedAt: true,
+        user: { select: { fullName: true, email: true } },
+      },
+    }) as unknown as Promise<ApplicationRow[]>);
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -101,9 +112,15 @@ export default async function Page({
     throw error;
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const updatedCount = Number(searchParams.updated);
   const hasError = searchParams.error === "1";
+  const start = total === 0 ? 0 : skip + 1;
+  const end = Math.min(skip + applications.length, total);
+
+  const baseParams = new URLSearchParams();
+  if (statusFilter !== "all") {
+    baseParams.set("status", statusFilter);
+  }
 
   return (
     <div className="grid gap-4">
@@ -114,7 +131,7 @@ export default async function Page({
               <CardTitle>Applications</CardTitle>
               <CardDescription>View submissions and review status.</CardDescription>
             </div>
-            <Badge variant="secondary">{applications.length}</Badge>
+            <Badge variant="secondary">{total}</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -130,8 +147,44 @@ export default async function Page({
             </div>
           ) : null}
 
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <form method="GET" className="flex flex-wrap items-end gap-3">
+              <div className="grid gap-1">
+                <label className="text-sm font-medium" htmlFor="statusFilter">
+                  Status
+                </label>
+                <select
+                  id="statusFilter"
+                  name="status"
+                  defaultValue={statusFilter}
+                  className="h-9 w-56 max-w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="all">All applications</option>
+                  <option value="DRAFT">Draft</option>
+                  <option value="SUBMITTED">Submitted</option>
+                </select>
+              </div>
+              <Button type="submit" size="sm" variant="outline">
+                Apply
+              </Button>
+            </form>
+            <div className="text-sm text-muted-foreground">
+              Showing <span className="font-medium text-foreground">{start}</span>-
+              <span className="font-medium text-foreground">{end}</span> of{" "}
+              <span className="font-medium text-foreground">{total}</span> applications
+            </div>
+          </div>
+
           <form action={bulkUpdateApplicationStatus} className="grid gap-4">
-            <input type="hidden" name="redirectTo" value={`/admin/applications?page=${page}`} />
+            <input
+              type="hidden"
+              name="redirectTo"
+              value={
+                statusFilter === "all"
+                  ? `/admin/applications?page=${page}`
+                  : `/admin/applications?page=${page}&status=${statusFilter}`
+              }
+            />
 
             <div className="grid gap-2 md:grid-cols-3 md:items-end">
               <div className="grid gap-2">
@@ -216,7 +269,7 @@ export default async function Page({
                         colSpan={8}
                         className="py-8 text-center text-sm text-muted-foreground"
                       >
-                        No applications yet.
+                        No applications found for this status.
                       </TableCell>
                     </TableRow>
                   ) : null}
@@ -228,9 +281,14 @@ export default async function Page({
       </Card>
 
       <SimplePagination
-        page={Math.min(page, totalPages)}
+        page={page}
         totalPages={totalPages}
-        hrefForPage={(p) => `/admin/applications?page=${p}`}
+        hrefForPage={(p) => {
+          const params = new URLSearchParams(baseParams);
+          params.set("page", String(p));
+          const qs = params.toString();
+          return qs.length ? `/admin/applications?${qs}` : `/admin/applications?page=${p}`;
+        }}
       />
     </div>
   );

@@ -24,13 +24,10 @@ function parsePage(value: unknown) {
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: { page?: string };
-}) {
+export default async function Page(props: PageProps<"/admin/users">) {
   await requireAdmin();
 
+  const searchParams = await props.searchParams;
   const pageSize = 10;
   const page = parsePage(searchParams.page);
   const skip = (page - 1) * pageSize;

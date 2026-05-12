@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { getPrismaDelegate, hasFunction } from "@/lib/prisma-delegates";
@@ -11,6 +12,8 @@ import {
 } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { UpdateStatusForm } from "@/app/admin/applications/[id]/status-form";
+
+type UploadPreviewKind = "image" | "pdf" | "file";
 
 type ApplicationDetail = {
   id: number;
@@ -60,6 +63,121 @@ type ApplicationDetail = {
   tertiaryGrade: string | null;
 };
 
+function getUploadPreviewKind(url: string): UploadPreviewKind {
+  const pathname = url.split("?")[0]?.toLowerCase() ?? "";
+
+  if (pathname.endsWith(".pdf")) {
+    return "pdf";
+  }
+
+  if (
+    pathname.endsWith(".png") ||
+    pathname.endsWith(".jpg") ||
+    pathname.endsWith(".jpeg") ||
+    pathname.endsWith(".webp") ||
+    pathname.endsWith(".gif") ||
+    pathname.endsWith(".svg")
+  ) {
+    return "image";
+  }
+
+  return "file";
+}
+
+function getUploadFilename(url: string) {
+  const pathname = url.split("?")[0] ?? url;
+  const filename = pathname.split("/").filter(Boolean).pop();
+
+  if (!filename) {
+    return "Uploaded file";
+  }
+
+  try {
+    return decodeURIComponent(filename);
+  } catch {
+    return filename;
+  }
+}
+
+function UploadPreviewCard({
+  label,
+  url,
+}: {
+  label: string;
+  url: string | null;
+}) {
+  if (!url) {
+    return (
+      <div className="rounded-xl border border-dashed bg-muted/20 p-4">
+        <div className="text-sm font-medium">{label}</div>
+        <p className="mt-2 text-sm text-muted-foreground">No file uploaded.</p>
+      </div>
+    );
+  }
+
+  const previewKind = getUploadPreviewKind(url);
+  const filename = getUploadFilename(url);
+
+  return (
+    <div className="overflow-hidden rounded-xl border bg-background">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
+        <div className="grid gap-1">
+          <div className="text-sm font-medium">{label}</div>
+          <div className="max-w-full break-all text-xs text-muted-foreground">
+            {filename}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-sm">
+          <a
+            href={url}
+            className="font-medium underline underline-offset-4"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open
+          </a>
+          <a
+            href={url}
+            className="text-muted-foreground underline underline-offset-4"
+            download
+          >
+            Download
+          </a>
+        </div>
+      </div>
+
+      {previewKind === "image" ? (
+        <div className="bg-muted/20 p-4">
+          <div className="relative h-80 overflow-hidden rounded-lg border bg-background">
+            <Image
+              src={url}
+              alt={label}
+              fill
+              unoptimized
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="object-contain"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {previewKind === "pdf" ? (
+        <iframe
+          title={label}
+          src={url}
+          className="h-96 w-full bg-white"
+        />
+      ) : null}
+
+      {previewKind === "file" ? (
+        <div className="p-4 text-sm text-muted-foreground">
+          Preview is not available for this file type. Use Open or Download.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function PrismaNotReadyCard({ title }: { title: string }) {
   return (
     <Card>
@@ -74,10 +192,13 @@ function PrismaNotReadyCard({ title }: { title: string }) {
   );
 }
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(
+  props: PageProps<"/admin/applications/[id]">
+) {
   await requireAdmin();
 
-  const id = Number(params.id);
+  const { id: idParam } = await props.params;
+  const id = Number(idParam);
   if (!Number.isFinite(id)) notFound();
 
   const applicationDelegate = getPrismaDelegate("application");
@@ -340,53 +461,23 @@ export default async function Page({ params }: { params: { id: string } }) {
         <Card>
           <CardHeader>
             <CardTitle>Uploads</CardTitle>
+            <CardDescription>
+              Review every document the applicant submitted.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Passport photo</span>
-              {application.passportPhotoUrl ? (
-                <a
-                  href={application.passportPhotoUrl}
-                  className="font-medium underline underline-offset-4"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View
-                </a>
-              ) : (
-                <span className="font-medium">-</span>
-              )}
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Birth certificate</span>
-              {application.birthCertificateUrl ? (
-                <a
-                  href={application.birthCertificateUrl}
-                  className="font-medium underline underline-offset-4"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View
-                </a>
-              ) : (
-                <span className="font-medium">-</span>
-              )}
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Education certificates</span>
-              {application.educationCertificatesUrl ? (
-                <a
-                  href={application.educationCertificatesUrl}
-                  className="font-medium underline underline-offset-4"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View
-                </a>
-              ) : (
-                <span className="font-medium">-</span>
-              )}
-            </div>
+          <CardContent className="grid gap-4">
+            <UploadPreviewCard
+              label="Passport photo"
+              url={application.passportPhotoUrl}
+            />
+            <UploadPreviewCard
+              label="Birth certificate"
+              url={application.birthCertificateUrl}
+            />
+            <UploadPreviewCard
+              label="Education certificates"
+              url={application.educationCertificatesUrl}
+            />
           </CardContent>
         </Card>
       </div>

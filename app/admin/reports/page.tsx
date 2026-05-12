@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/current-user";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -33,51 +39,51 @@ function parseCourseId(value: unknown) {
   return Number.isFinite(id) && id > 0 ? Math.floor(id) : null;
 }
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: { page?: string; courseId?: string };
-}) {
+export default async function Page(props: PageProps<"/admin/reports">) {
   await requireAdmin();
 
+  const searchParams = await props.searchParams;
   const pageSize = 20;
-  const page = parsePage(searchParams.page);
+  const requestedPage = parsePage(searchParams.page);
   const courseId = parseCourseId(searchParams.courseId);
-  const skip = (page - 1) * pageSize;
-
-  const courses = await prisma.course.findMany({
-    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-    select: { id: true, title: true, duration: true, isActive: true },
-  });
 
   const where = {
     status: { not: "DRAFT" as const },
     ...(courseId ? { courseId } : { courseId: { not: null } }),
   };
 
-  const [total, applications] = await Promise.all([
-    prisma.application.count({ where }),
-    prisma.application.findMany({
-      where,
-      orderBy: { submittedAt: "desc" },
-      skip,
-      take: pageSize,
-      select: {
-        id: true,
-        status: true,
-        submittedAt: true,
-        course: { select: { id: true, title: true } },
-        user: { select: { fullName: true, email: true, phoneNumber: true } },
-      },
+  const [courses, total] = await Promise.all([
+    prisma.course.findMany({
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+      select: { id: true, title: true, duration: true, isActive: true },
     }),
+    prisma.application.count({ where }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const skip = (page - 1) * pageSize;
+
+  const applications = await prisma.application.findMany({
+    where,
+    orderBy: { submittedAt: "desc" },
+    skip,
+    take: pageSize,
+    select: {
+      id: true,
+      status: true,
+      submittedAt: true,
+      course: { select: { id: true, title: true } },
+      user: { select: { fullName: true, email: true, phoneNumber: true } },
+    },
+  });
 
   const baseParams = new URLSearchParams();
   if (courseId) baseParams.set("courseId", String(courseId));
 
   const downloadHref = `/admin/reports/download${courseId ? `?courseId=${courseId}` : ""}`;
+  const start = total === 0 ? 0 : skip + 1;
+  const end = Math.min(skip + applications.length, total);
 
   return (
     <div className="grid gap-4">
@@ -128,7 +134,15 @@ export default async function Page({
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle className="text-base">Applications</CardTitle>
+          <div className="grid gap-1">
+            <CardTitle className="text-base">Applications</CardTitle>
+            <CardDescription>
+              Showing <span className="font-medium text-foreground">{start}</span>-
+              <span className="font-medium text-foreground">{end}</span> of{" "}
+              <span className="font-medium text-foreground">{total}</span> submitted
+              applications
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent className="px-0">
           <Table>
@@ -179,7 +193,7 @@ export default async function Page({
       </Card>
 
       <SimplePagination
-        page={Math.min(page, totalPages)}
+        page={page}
         totalPages={totalPages}
         hrefForPage={(p) => {
           const params = new URLSearchParams(baseParams);
